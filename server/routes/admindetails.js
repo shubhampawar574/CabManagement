@@ -9,7 +9,7 @@ router.get("/", async (req, res) => {
     const selections = await Selection.find({
       comeToOffice,
       periodOfDay,
-    }).populate("userId", "name lat lon");
+    }).populate("userId");
     // .exec((err, posts) => {
     //   if (err) {
     //     console.error("Error retrieving posts:", err);

@@ -185,10 +185,33 @@ const AdminDetailsScreen = () => {
     return adjustedClusters;
   }
 
+  function calculateMean(points) {
+    if (points.length === 0) return { meanX: 0, meanY: 0 };
+
+    let sumX = 0;
+    let sumY = 0;
+
+    points.forEach((point) => {
+      sumX += point[0];
+      sumY += point[1];
+    });
+
+    const meanX = sumX / points.length;
+    const meanY = sumY / points.length;
+
+    return { meanX, meanY };
+  }
+  // Function to calculate the mean for multiple 2D arrays of points
+  function calculateMeansForMultipleArrays(arraysOfPoints) {
+    return arraysOfPoints.map((points) => calculateMean(points));
+  }
+
   const applyKMeans = () => {
     const data = userDetails.map((userDetail) => [
       userDetail.userId.lat,
       userDetail.userId.lon,
+      userDetail.userId.location,
+      userDetail.userId._id,
     ]);
     const k = 3; // Number of clusters, change as needed
     const clusters = kMeansEqualSize(data, k);
@@ -200,12 +223,77 @@ const AdminDetailsScreen = () => {
   };
 
   const handleAssignDrivers = async () => {
-    for (const clusterId of Object.keys(selectedDrivers)) {
-      await axios.put(`/api/assign-driver/${clusterId}`, {
-        driverId: selectedDrivers[clusterId],
+    // for (const clusterId of Object.keys(selectedDrivers)) {
+    //   await axios.put(`/api/assign-driver/${clusterId}`, {
+    //     driverId: selectedDrivers[clusterId],
+    //   });
+    // }
+
+    // Calculate the means for the sample arrays of points
+    const meanclusters = calculateMeansForMultipleArrays(clusters);
+    console.log("drivers", drivers);
+    console.log("meanclusters", meanclusters);
+
+    // Function to calculate the Euclidean distance between two points
+    const calculateDistance = (point1, point2) => {
+      return Math.sqrt(
+        Math.pow(point1.lat - point2.meanX, 2) +
+          Math.pow(point1.lon - point2.meanY, 2)
+      );
+    };
+
+    // Function to assign each cluster to the nearest driver
+    const assignClustersToDrivers = (drivers, clusters) => {
+      let assignments = [];
+      let usedDrivers = new Set();
+      let usedClusters = new Set();
+
+      // Create an array of all distances between drivers and clusters
+      let distances = [];
+      drivers.forEach((driver, driverIndex) => {
+        clusters.forEach((cluster, clusterIndex) => {
+          const distance = calculateDistance(driver, cluster);
+          distances.push({ driverIndex, clusterIndex, distance });
+        });
       });
-    }
-    alert("Drivers assigned successfully");
+
+      // Sort distances in ascending order
+      distances.sort((a, b) => a.distance - b.distance);
+
+      // Assign clusters to drivers based on the shortest distance, ensuring each cluster is assigned once
+      distances.forEach(({ driverIndex, clusterIndex }) => {
+        if (!usedDrivers.has(driverIndex) && !usedClusters.has(clusterIndex)) {
+          assignments.push({
+            clusterId: clusterIndex,
+            userId: drivers[driverIndex].userId,
+          });
+          usedDrivers.add(driverIndex);
+          usedClusters.add(clusterIndex);
+        }
+      });
+
+      return assignments;
+    };
+
+    // Generate the new array of objects
+    const clusterDriverAssignments = assignClustersToDrivers(
+      drivers,
+      meanclusters
+    );
+
+    // Output the result
+    console.log(clusterDriverAssignments);
+
+    // Append cluster information to each assignment
+    const temp = clusterDriverAssignments.map((assignment) => ({
+      ...assignment,
+      users: clusters[assignment.clusterId],
+    }));
+
+    // Output the result
+    console.log("temp", temp);
+
+    /* alert("Drivers assigned successfully"); */
   };
 
   const handleLogout = () => {
@@ -262,7 +350,7 @@ const AdminDetailsScreen = () => {
           {clusters.map((cluster, index) => (
             <div key={index}>
               <h2>Cluster {index + 1}</h2>
-              <select
+              {/* <select
                 value={selectedDrivers[cluster._id] || ""}
                 onChange={(e) =>
                   handleDriverChange(cluster._id, e.target.value)
@@ -274,7 +362,7 @@ const AdminDetailsScreen = () => {
                     {driver.name}
                   </option>
                 ))}
-              </select>
+              </select> */}
               <ul>
                 {cluster.map((point, idx) => (
                   <li key={idx}>{point.join(", ")}</li>
